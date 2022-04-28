@@ -1,0 +1,15 @@
+options:
+  batch_size:
+    - 64
+  epochs:
+    - 1000
+  dataset:
+    - custom
+  net:
+    - xception
+  optimizer:
+    - Adam
+  initial_lr:
+    - 0.000125
+  initial_momentum:
+    - 0.9
