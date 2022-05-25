@@ -7,7 +7,7 @@ from torchvision.models import resnet,vgg, inception
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 
-from models import resnet_cifar10, inceptionv3_1ch, xception
+from models import resnet_cifar10, densenet_1ch
 
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
@@ -63,26 +63,6 @@ custom_transform = A.Compose(
     ]
 )
 
-# for inception
-custom_transform_i = A.Compose(
-    [
-        A.Resize(height=299, width=299),
-        A.Rotate(10),
-        ToTensorV2(),
-    ]
-)
-
-# same custom_transform (with torch transforms)
-# transform_train = transforms.Compose([
-#     transforms.Resize((256, 256)),
-#     transforms.RandomRotation(10),
-#     transforms.ToTensor(),
-# ])
-# transform_test = transforms.Compose([
-#     transforms.Resize((256, 256)),
-#     transforms.ToTensor(),
-# ])
-
 
 # testdata setting
 cifar10_test = A.Compose(
@@ -112,13 +92,6 @@ custom_test = A.Compose(
     [
         A.Resize(height=256, width=256),
         A.Normalize(mean=0.5, std=0.5),
-        ToTensorV2(),
-    ]
-)
-
-custom_test_i = A.Compose(
-    [
-        A.Resize(height=299, width=299),
         ToTensorV2(),
     ]
 )
@@ -271,66 +244,6 @@ def load_dataset(*,data_src='/home/work/test1/data', batch_size, dataset) :
             dataset=val_dataset, batch_size=batch_size, sampler=val_sampler, pin_memory=True, num_workers=3)
         test_loader = torch.utils.data.DataLoader(
             dataset=test_dataset, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=3)
-    elif dataset == 'custom3ch':
-        train_dataset = datasets.ImageFolder(root=data_src+'/chest_xray/train',
-                                             transform=Transforms(custom_transform))                                  
-        val_dataset = datasets.ImageFolder(root=data_src+'/chest_xray/train',
-                                           transform=Transforms(custom_test), loader=custom_pil_loader)
-        test_dataset = datasets.ImageFolder(root=data_src+'/chest_xray/test',
-                                         transform=Transforms(custom_test))
-        train_sampler, val_sampler = train_val_split(train_dataset)
-
-        train_loader = torch.utils.data.DataLoader(
-            dataset=train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=3)
-        val_loader = torch.utils.data.DataLoader(
-            dataset=val_dataset, batch_size=batch_size, sampler=val_sampler, pin_memory=True, num_workers=4)
-        test_loader = torch.utils.data.DataLoader(
-            dataset=test_dataset, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=3)
-    elif dataset == 'custom3ch_i':
-        train_dataset = datasets.ImageFolder(root=data_src+'/chest_xray/train',
-                                             transform=Transforms(custom_transform_i))                                  
-        val_dataset = datasets.ImageFolder(root=data_src+'/chest_xray/train',
-                                           transform=Transforms(custom_test_i))
-        test_dataset = datasets.ImageFolder(root=data_src+'/chest_xray/test',
-                                         transform=Transforms(custom_test_i))
-        train_sampler, val_sampler = train_val_split(train_dataset)
-
-        train_loader = torch.utils.data.DataLoader(
-            dataset=train_dataset, batch_size=batch_size, sampler=train_sampler, pin_memory=True, num_workers=3)
-        val_loader = torch.utils.data.DataLoader(
-            dataset=val_dataset, batch_size=batch_size, sampler=val_sampler, pin_memory=True, num_workers=3)
-        test_loader = torch.utils.data.DataLoader(
-            dataset=test_dataset, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=3)
-    elif dataset == 'custom_i':
-        train_dataset = datasets.ImageFolder(root=data_src+'/chest_xray/train',
-                                             transform=Transforms(custom_transform_i), loader=custom_pil_loader)                                  
-        val_dataset = datasets.ImageFolder(root=data_src+'/chest_xray/train',
-                                           transform=Transforms(custom_test_i), loader=custom_pil_loader)
-        test_dataset = datasets.ImageFolder(root=data_src+'/chest_xray/test',
-                                         transform=Transforms(custom_test_i), loader=custom_pil_loader)
-        train_sampler, val_sampler = train_val_split(train_dataset)
-
-        train_loader = torch.utils.data.DataLoader(
-            dataset=train_dataset, batch_size=batch_size, sampler=train_sampler, pin_memory=True, num_workers=3)
-        val_loader = torch.utils.data.DataLoader(
-            dataset=val_dataset, batch_size=batch_size, sampler=val_sampler, pin_memory=True, num_workers=3)
-        test_loader = torch.utils.data.DataLoader(
-            dataset=test_dataset, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=3)
-    elif dataset == 'custom_3class':
-        train_dataset = datasets.ImageFolder(root=data_src + '/chest_xray3/train',
-                                             transform=Transforms(custom_transform), loader=custom_pil_loader)
-        val_dataset = datasets.ImageFolder(root=data_src + '/chest_xray3/train',
-                                           transform=Transforms(custom_test), loader=custom_pil_loader)
-        test_dataset = datasets.ImageFolder(root=data_src + '/chest_xray3/test',
-                                            transform=Transforms(custom_test), loader=custom_pil_loader)
-        train_sampler, val_sampler = train_val_split(train_dataset)
-
-        train_loader = torch.utils.data.DataLoader(
-            dataset=train_dataset, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=3)
-        val_loader = torch.utils.data.DataLoader(
-            dataset=val_dataset, batch_size=batch_size, sampler=val_sampler, pin_memory=True, num_workers=3)
-        test_loader = torch.utils.data.DataLoader(
-            dataset=test_dataset, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=3)
     else:
         raise ValueError('please check your "dataset" input.')
 
@@ -349,10 +262,6 @@ def select_model(net, dataset, device_num):
         'cifar10': 10,
         'cifar100': 100,
         'custom': 2,
-        'custom_i': 2,
-        'custom_3class': 3,
-        'custom3ch': 2,
-        'custom3ch_i': 2,
         'imagenet': 1000,
         'mnist': 10
     }.get(dataset, "error")
@@ -375,9 +284,9 @@ def select_model(net, dataset, device_num):
             'resnet152': resnet.resnet152(num_classes=num_classes),
             'resnet200': resnet200(num_classes=num_classes),
             'vgg16': vgg.vgg16(num_classes=num_classes),
-            'inception': inception.inception_v3(num_classes=num_classes, init_weights=True),
-            'inception_1ch': inceptionv3_1ch.inception_v3(num_classes=num_classes, init_weights=True),
-            'xception' : xception.xception(input_channel=1, num_classes=num_classes)
+            'densenet121': densenet_1ch.densenet121(num_classes=num_classes),
+            'densenet169': densenet_1ch.densenet169(num_classes=num_classes),
+            'densenet201': densenet_1ch.densenet201(num_classes=num_classes),
         }.get(net, "error")
 
     if model == "error":

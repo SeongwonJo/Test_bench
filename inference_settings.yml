@@ -1,0 +1,7 @@
+H: 256
+W: 256
+net: densenet201
+dataset: custom
+device: cuda:0
+data_path: D:/archive (1)/chest_xray/test
+pt_path: D:/ckpt_custom_densenet201.pt

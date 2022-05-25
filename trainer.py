@@ -38,34 +38,6 @@ def train(model, train_loader, optimizer, device):
     return train_loss, train_accuracy
 
 
-# inception의 보조분류기 때문에 따로 만듦
-def train_inception(model, train_loader, optimizer, device):
-    model.train()
-    running_loss = 0
-    correct = 0
-    total = 0
-
-    for batch_idx, (data, target) in enumerate(train_loader):
-        data, target = data.float().to(device), target.to(device)
-        optimizer.zero_grad()
-        output, aux_output = model(data)
-        loss1 = F.cross_entropy(output, target)
-        loss2 = F.cross_entropy(aux_output, target)
-        loss = loss1 + 0.4*loss2
-        loss.backward()
-        optimizer.step()
-
-        running_loss += loss.item()
-        _, predicted = output.max(1)
-        total += target.size(0)
-        correct += predicted.eq(target.view_as(predicted)).sum().item()
-
-    train_loss = running_loss / len(train_loader)
-    train_accuracy = 100. * correct / total
-
-    return train_loss, train_accuracy
-
-
 # test
 def evaluate(model, test_loader, device):
     model.eval()
@@ -139,25 +111,20 @@ class Training:
         #                                         epochs=self.start_epoch + self.options_dict['epochs']
         #                                         , last_ep=self.start_epoch - 1)
 
-        if (self.options_dict['net'] == 'inception') or (self.options_dict['net'] == 'inception_1ch'):
-            train_network = train_inception
-        else:
-            train_network = train
-
         self.current_data[self.index_num] = {
             'batch_size': self.options_dict['batch_size'],
             'dataset': self.options_dict['dataset'],
             'model': self.options_dict['net'],
             'optimizer': self.options_dict['optimizer'],
             'initial_lr': self.options_dict['initial_lr'],
-            'initial_momentum': (self.options_dict['initial_momentum'] if self.options_dict['initial_momentum'] != 'Adam' else "")
+            'initial_momentum': (self.options_dict['initial_momentum'] if self.options_dict['optimizer'] != 'Adam' else "")
         }
 
         print("training start")
         start_time = time.time()
 
         for epoch in range(self.start_epoch, self.options_dict['epochs']+1):
-            train_loss, train_accuracy = train_network(self.model, self.train_loader, self.optimizer, self.device)
+            train_loss, train_accuracy = train(self.model, self.train_loader, self.optimizer, self.device)
             val_accuracy = evaluate(self.model, self.val_loader, self.device)
             # lr_scheduler.step()
 
