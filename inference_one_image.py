@@ -3,9 +3,10 @@ import argparse
 from PIL import Image
 
 import torch
+import torch.nn as nn
 import torchvision.transforms as T
-
-from setup import select_model
+from torchvision.models import resnet
+from models import densenet_1ch
 
 
 def yml_to_dict(filepath):
@@ -22,6 +23,42 @@ def custom_pil_loader(path):
         return img.convert('L')
 
 
+# resnet200
+def resnet200(pretrained: bool = False, progress: bool = True, **kwargs) -> resnet.ResNet:
+    return resnet._resnet('resnet200', resnet.Bottleneck, [3, 24, 36, 3], pretrained, progress,
+                   **kwargs)
+
+
+# select model
+def select_model(net, dataset, device_num):
+    num_classes = {
+        'custom': 2,
+    }.get(dataset, "error")
+
+    model = {
+        'resnet18': resnet.resnet18(num_classes=num_classes),
+        'resnet50': resnet.resnet50(num_classes=num_classes),
+        'resnet101': resnet.resnet101(num_classes=num_classes),
+        'resnet152': resnet.resnet152(num_classes=num_classes),
+        'resnet200': resnet200(num_classes=num_classes),
+        'densenet121': densenet_1ch.densenet121(num_classes=num_classes),
+        'densenet169': densenet_1ch.densenet169(num_classes=num_classes),
+        'densenet201': densenet_1ch.densenet201(num_classes=num_classes),
+    }.get(net, "error")
+
+    if model == "error":
+        raise ValueError('please check your "net" input.')
+
+    if net[0:6] == 'resnet':
+        model.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+
+    device = torch.device(device_num if torch.cuda.is_available() else "cpu")
+    model.to(device)
+    print("device:", device)
+
+    return model, device
+
+
 def initialization(option_dict):
     transforms = T.Compose([
         T.Resize((option_dict['resolution'], option_dict['resolution'])),
@@ -29,8 +66,8 @@ def initialization(option_dict):
         T.Normalize((0.5,), (0.5,)),
     ])
 
-    # data_path == image path
-    img = custom_pil_loader(option_dict['data_path'])
+    # image_path == image path
+    img = custom_pil_loader(option_dict['image_path'])
     transformed = transforms(img)
 
     model, device = select_model(option_dict['net'], option_dict['dataset'], option_dict['device'])
