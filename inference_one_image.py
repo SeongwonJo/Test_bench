@@ -70,16 +70,6 @@ def transformed(option_dict, image_path):
     transformed = transforms(img)
 
     return transformed
-# def
-# transforms = T.Compose([
-#         T.Resize((option_dict['resolution'], option_dict['resolution'])),
-#         T.ToTensor(),
-#         T.Normalize((0.5,), (0.5,)),
-#     ])
-#
-#     # image_path == image path
-#     img = custom_pil_loader(option_dict['image_path'])
-#     transformed = transforms(img)
 
 
 def initialization(option_dict):
