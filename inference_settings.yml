@@ -3,5 +3,3 @@ net: densenet201
 dataset: custom
 device: cuda:0
 pt_path: D:/ckpt_densenet201.pt
-data_path: D:/archive (1)/chest_xray/test
-image_path: D:/archive (1)/chest_xray/test/NORMAL/NORMAL-2728578-0001.jpeg

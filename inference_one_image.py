@@ -59,21 +59,34 @@ def select_model(net, dataset, device_num):
     return model, device
 
 
-def initialization(option_dict):
+def transformed(option_dict, image_path):
     transforms = T.Compose([
         T.Resize((option_dict['resolution'], option_dict['resolution'])),
         T.ToTensor(),
         T.Normalize((0.5,), (0.5,)),
     ])
 
-    # image_path == image path
-    img = custom_pil_loader(option_dict['image_path'])
+    img = custom_pil_loader(image_path)
     transformed = transforms(img)
 
+    return transformed
+# def
+# transforms = T.Compose([
+#         T.Resize((option_dict['resolution'], option_dict['resolution'])),
+#         T.ToTensor(),
+#         T.Normalize((0.5,), (0.5,)),
+#     ])
+#
+#     # image_path == image path
+#     img = custom_pil_loader(option_dict['image_path'])
+#     transformed = transforms(img)
+
+
+def initialization(option_dict):
     model, device = select_model(option_dict['net'], option_dict['dataset'], option_dict['device'])
     model.load_state_dict(torch.load(option_dict['pt_path'], map_location=device)['model_state_dict'], strict=False)
 
-    return transformed, model, device
+    return model, device
 
 
 def one_evaluate(model, data, device):
@@ -96,9 +109,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch Image Classification')
     parser.add_argument("--yml_path", required=True, default="./inference_setting.yml",
                         help="path to yml file contains options")
+    parser.add_argument("--image_path", required=True)
     args = parser.parse_args()
 
     o_dict = yml_to_dict(args.yml_path)
-    transformed_img, model, device = initialization(o_dict)
+    model, device = initialization(o_dict)
+    transformed_img = transformed(o_dict, args.image_path)
     pred = one_evaluate(model, transformed_img, device)
     print('prediction result:', pred)

@@ -1,16 +1,13 @@
+import os
+import yaml
+import argparse
+from PIL import Image
+
 import torch
 import torch.nn as nn
-from torchvision import datasets
-from torch.utils.data import DataLoader
 import torchvision.transforms as T
 from torchvision.models import resnet
 from models import densenet_1ch
-from PIL import Image
-
-import yaml
-import argparse
-
-from trainer import evaluate
 
 
 def yml_to_dict(filepath):
@@ -63,6 +60,22 @@ def select_model(net, dataset, device_num):
     return model, device
 
 
+def transformed(option_dict, data_path):
+    transforms = T.Compose([
+        T.Resize((option_dict['resolution'], option_dict['resolution'])),
+        T.ToTensor(),
+        T.Normalize((0.5,), (0.5,)),
+    ])
+
+    f_list = os.listdir(data_path)
+    transformed_list = []
+    for file in f_list:
+        img = custom_pil_loader(data_path+'/'+file)
+        transformed_list.append(transforms(img))
+
+    return transformed_list
+
+
 def initialization(option_dict):
     model, device = select_model(option_dict['net'], option_dict['dataset'], option_dict['device'])
     model.load_state_dict(torch.load(option_dict['pt_path'], map_location=device)['model_state_dict'], strict=False)
@@ -70,20 +83,30 @@ def initialization(option_dict):
     return model, device
 
 
-def transformed(option_dict, data_path):
-    transforms = T.Compose([
-            T.Resize((option_dict['resolution'], option_dict['resolution'])),
-            T.ToTensor(),
-            T.Normalize((0.5,), (0.5,)),
-        ])
+def evaluate_onebyone(model, data_list, device):
+    label_tags = {
+        0: 'Normal',
+        1: 'Pneumonia',
+    }
+    result_list = []
 
-    # data_path == image folder path
-    dataset = datasets.ImageFolder(root=data_path,
-                                   transform=transforms, loader=custom_pil_loader)
-    data_loader = torch.utils.data.DataLoader(
-        dataset=dataset, batch_size=64, shuffle=False, pin_memory=True, num_workers=3)
+    model.eval()
 
-    return data_loader
+    with torch.no_grad():
+        for data in data_list:
+            output = model(data.unsqueeze(0).to(device))
+
+            _, predicted = output.max(1)
+            pred = label_tags[predicted.item()]
+            result_list.append(pred)
+
+    return result_list
+
+
+def result_dict(data_path, result):
+    f_list = os.listdir(data_path)
+    r_dict = dict(zip(f_list, result))
+    return r_dict
 
 
 if __name__ == '__main__':
@@ -95,6 +118,7 @@ if __name__ == '__main__':
 
     o_dict = yml_to_dict(args.yml_path)
     model, device = initialization(o_dict)
-    test_loader = transformed(o_dict, args.data_path)
-    test_accuracy = evaluate(model, test_loader, device)
-    print('Test Accuracy: {:.2f}%'.format(test_accuracy))
+    t_list = transformed(o_dict, args.data_path)
+    r_list = evaluate_onebyone(model, t_list, device)
+    r_dict = result_dict(args.data_path, r_list)
+    print('prediction result:', r_dict)
