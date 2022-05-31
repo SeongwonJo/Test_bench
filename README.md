@@ -30,6 +30,21 @@ python main.py
 
   1. 테스트할 이미지들이 들어있는 폴더를 argument로 입력
 
+     - 폴더의 안에 이미지 파일이 각 클래스 폴더에 들어가있어야 함
+
+     - ```
+       test/
+       ├── NORMAL
+       │   ├── 1.jpeg
+       │   ├── 2.jpeg
+       │   └── ...
+       │    
+       └── PNEUMONIA
+           ├── 4.jpeg
+           ├── 5.jpeg
+           └── ...
+       ```
+
   ```sh
   python inference.py -i './test'
   ```
