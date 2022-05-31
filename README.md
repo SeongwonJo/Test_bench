@@ -1,3 +1,9 @@
+## About project
+
+pytorch image classification 
+
+<br><br><br>
+
 ## Usage
 
 code examples
@@ -16,6 +22,8 @@ python main.py
   python main.py -d "cuda:1" -c "D:/folder/result.csv"
   ```
 
+<br><br>
+
 ### Inference
 
 - 데이터 세트에 대한 추론 정확도 출력
@@ -28,7 +36,7 @@ python main.py
 
   * 모델에 입력되는 이미지 크기(resolution), 모델 종류(net), 데이터셋, 사용할 장치, pt 파일의 경로를 inference_settings.yml 파일에서 설정할 수 있습니다.
 
-    
+<br>
 
 - 하나의 이미지에 대한 추론 결과 출력
 
@@ -38,7 +46,8 @@ python main.py
   python inference_one_image.py -i './test/BACTERIA-134339-0001.jpeg'
   ```
 
-  
+
+<br>
 
 - 폴더 안의 모든 이미지에 대한 결과를 dictionary로 출력
 
@@ -48,7 +57,8 @@ python main.py
   python inference_folder.py -i './test'
   ```
 
-  
+
+<br>
 
 - test용 pt파일
   - https://etri.gov-dooray.com/share/drive-files/kdhawuidbrbd.xeBDyzezQZOwrAzlOmtSCQ
