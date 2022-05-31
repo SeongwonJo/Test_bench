@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from torch import optim
 from torchvision import transforms, datasets
-from torchvision.models import resnet,vgg, inception
+from torchvision.models import resnet, vgg, inception
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 
@@ -294,7 +294,7 @@ def select_model(net, dataset, device_num):
 
     if dataset == 'mnist':
         model.conv1 = nn.Conv2d(1, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
-    elif dataset == 'custom' or dataset == 'custom2':
+    elif dataset == 'custom':
         model.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
 
     device = torch.device(device_num if torch.cuda.is_available() else "cpu")
