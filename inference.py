@@ -10,8 +10,6 @@ from PIL import Image
 import yaml
 import argparse
 
-from trainer import evaluate
-
 
 def yml_to_dict(filepath):
     with open(filepath) as f:
@@ -84,6 +82,25 @@ def transformed(option_dict, data_path):
         dataset=dataset, batch_size=64, shuffle=False, pin_memory=True, num_workers=3)
 
     return data_loader
+
+
+def evaluate(model, test_loader, device):
+    model.eval()
+    correct = 0
+    total = 0
+
+    with torch.no_grad():
+        for i, (data, target) in enumerate(test_loader):
+            data, target = data.float().to(device), target.to(device)
+            output = model(data)
+
+            _, predicted = output.max(1)
+            total += target.size(0)
+            correct += predicted.eq(target.view_as(predicted)).sum().item()
+
+    test_accuracy = 100. * correct / total
+
+    return test_accuracy
 
 
 if __name__ == '__main__':
