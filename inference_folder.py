@@ -7,11 +7,12 @@
 ###########################################################################
 _description = '''\
 ====================================================
-inference_one_image.py : T
+inference_folder.py : T
                     Written by Seongwon Jo @ 2022-05-31
 ====================================================
-Example : python inference_one_image.py -i ./test/BACTERIA-134339-0001.jpeg 
+Example : python inference_folder.py -i ./test 
 '''
+import os
 import yaml
 import argparse
 import textwrap
@@ -32,7 +33,7 @@ def ArgumentParse(_intro_msg, L_Param, bUseParam=False):
 
     parser.add_argument('-y', '--yml_path', default="./inference_settings.yml",
                         help="path to yml file contains options")
-    parser.add_argument('-i', '--image_path', default="./test/BACTERIA-134339-0001.jpeg")
+    parser.add_argument('-i', '--image_path', default="./test")
 
     args = parser.parse_args()
     return args
@@ -93,17 +94,20 @@ class image_classification:
 
         return model, device
 
-    def transformed(self):
+    def transformed(self,):
         transforms = T.Compose([
             T.Resize((self.o_dict['resolution'], self.o_dict['resolution'])),
             T.ToTensor(),
             T.Normalize((0.5,), (0.5,)),
         ])
 
-        img = self.custom_pil_loader(self.args.image_path)
-        transformed = transforms(img)
+        f_list = os.listdir(self.args.image_path)
+        transformed_list = []
+        for file in f_list:
+            img = self.custom_pil_loader(self.args.image_path + '/' + file)
+            transformed_list.append(transforms(img))
 
-        return transformed
+        return transformed_list
 
     def initialization(self, option_dict):
         model, device = self.select_model(option_dict['net'], option_dict['dataset'], option_dict['device'])
@@ -111,27 +115,30 @@ class image_classification:
 
         return model, device
 
-    def one_evaluate(self, data):
+    def evaluate_onebyone(self, data_list):
         label_tags = {
             0: 'Normal',
             1: 'Pneumonia',
         }
+        result_list = []
+
         self.model.eval()
 
         with torch.no_grad():
-            output = self.model(data.unsqueeze(0).to(self.device))
+            for data in data_list:
+                output = self.model(data.unsqueeze(0).to(self.device))
 
-            _score, predicted = output.max(1)
-            print(output)
-            pred = label_tags[predicted.item()]
+                _score, predicted = output.max(1)
+                pred = label_tags[predicted.item()]
+                result_list.append([pred, _score])
 
-        return pred, _score
+        return result_list
 
 
 if __name__ == '__main__':
     c_Imgc = image_classification()
 
-    transformed_img = c_Imgc.transformed()
-    pred, _score    = c_Imgc.one_evaluate(transformed_img)
+    transformed_list = c_Imgc.transformed()
+    result_dict      = c_Imgc.evaluate_onebyone(transformed_list)
 
-    print('prediction result: %s  Score: %f' %(pred, _score))
+    print('prediction result: {file : [prediction, score]}', result_dict)

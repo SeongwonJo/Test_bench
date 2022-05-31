@@ -7,10 +7,10 @@
 ###########################################################################
 _description = '''\
 ====================================================
-inference_one_image.py : T
+inference.py : T
                     Written by Seongwon Jo @ 2022-05-31
 ====================================================
-Example : python inference_one_image.py -i ./test/BACTERIA-134339-0001.jpeg 
+Example : python inference.py -i ./test
 '''
 import yaml
 import argparse
@@ -19,6 +19,8 @@ from PIL import Image
 
 import torch
 import torch.nn as nn
+from torchvision import datasets
+from torch.utils.data import DataLoader
 import torchvision.transforms as T
 from torchvision.models import resnet
 from models import densenet_1ch
@@ -32,7 +34,7 @@ def ArgumentParse(_intro_msg, L_Param, bUseParam=False):
 
     parser.add_argument('-y', '--yml_path', default="./inference_settings.yml",
                         help="path to yml file contains options")
-    parser.add_argument('-i', '--image_path', default="./test/BACTERIA-134339-0001.jpeg")
+    parser.add_argument('-i', '--image_path', default="./test")
 
     args = parser.parse_args()
     return args
@@ -100,10 +102,13 @@ class image_classification:
             T.Normalize((0.5,), (0.5,)),
         ])
 
-        img = self.custom_pil_loader(self.args.image_path)
-        transformed = transforms(img)
+        # data_path == image folder path
+        dataset = datasets.ImageFolder(root=self.args.image_path,
+                                       transform=transforms, loader=self.custom_pil_loader)
+        data_loader = torch.utils.data.DataLoader(
+            dataset=dataset, batch_size=64, shuffle=False, pin_memory=True, num_workers=3)
 
-        return transformed
+        return data_loader
 
     def initialization(self, option_dict):
         model, device = self.select_model(option_dict['net'], option_dict['dataset'], option_dict['device'])
@@ -111,27 +116,29 @@ class image_classification:
 
         return model, device
 
-    def one_evaluate(self, data):
-        label_tags = {
-            0: 'Normal',
-            1: 'Pneumonia',
-        }
+    def evaluate(self, test_loader):
         self.model.eval()
+        correct = 0
+        total = 0
 
         with torch.no_grad():
-            output = self.model(data.unsqueeze(0).to(self.device))
+            for i, (data, target) in enumerate(test_loader):
+                data, target = data.float().to(self.device), target.to(self.device)
+                output = self.model(data)
 
-            _score, predicted = output.max(1)
-            print(output)
-            pred = label_tags[predicted.item()]
+                _, predicted = output.max(1)
+                total += target.size(0)
+                correct += predicted.eq(target.view_as(predicted)).sum().item()
 
-        return pred, _score
+        test_accuracy = 100. * correct / total
+
+        return test_accuracy
 
 
 if __name__ == '__main__':
     c_Imgc = image_classification()
 
-    transformed_img = c_Imgc.transformed()
-    pred, _score    = c_Imgc.one_evaluate(transformed_img)
+    data_loader   = c_Imgc.transformed()
+    test_accuracy = c_Imgc.evaluate(data_loader)
 
-    print('prediction result: %s  Score: %f' %(pred, _score))
+    print('prediction Accuracy: {:.2f}%'.format(test_accuracy))

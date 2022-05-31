@@ -2,4 +2,4 @@ resolution: 256
 net: densenet201
 dataset: custom
 device: cuda:0
-pt_path: D:/ckpt_densenet201.pt
+pt_path: ./ckpt_densenet201.pt
