@@ -122,7 +122,6 @@ class image_classification:
             output = self.model(data.unsqueeze(0).to(self.device))
 
             _score, predicted = output.max(1)
-            print(output)
             pred = label_tags[predicted.item()]
 
         return pred, _score
