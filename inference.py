@@ -28,7 +28,7 @@ from models import densenet_1ch
 
 def ArgumentParse(_intro_msg, L_Param, bUseParam=False):
     parser = argparse.ArgumentParser(
-        prog='inference_one_image.py',
+        prog='inference.py',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=textwrap.dedent(_intro_msg))
 

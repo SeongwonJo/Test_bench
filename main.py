@@ -7,11 +7,11 @@ from trainer import Training
 
 def argument():
     parser = argparse.ArgumentParser(description='PyTorch Image Classification')
-    parser.add_argument("--yml_path", required=True, default="./properties.yml",
+    parser.add_argument('-y', "--yml_path", default="./properties.yml",
                         help="path to yml file contains experiment options")
-    parser.add_argument("--device", default="cuda:0")
-    parser.add_argument("--csv_path", default='/home/work/test1/result.csv')
-    parser.add_argument("--task", default="train")
+    parser.add_argument('-d', "--device", default="cuda:0")
+    parser.add_argument('-c', "--csv_path", default='./result.csv')
+    parser.add_argument('-t', "--task", default="train")
     arguments = parser.parse_args()
     return arguments
 
