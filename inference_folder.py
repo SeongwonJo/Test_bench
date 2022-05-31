@@ -120,7 +120,7 @@ class image_classification:
             0: 'Normal',
             1: 'Pneumonia',
         }
-        result_list = []
+        r_list = []
 
         self.model.eval()
 
@@ -130,15 +130,21 @@ class image_classification:
 
                 _score, predicted = output.max(1)
                 pred = label_tags[predicted.item()]
-                result_list.append([pred, _score])
+                r_list.append([pred, _score.item()])
 
-        return result_list
+        return r_list
+
+    def result_dict(self, result_list):
+        f_list = os.listdir(self.args.image_path)
+        r_dict = dict(zip(f_list, result_list))
+        return r_dict
 
 
 if __name__ == '__main__':
     c_Imgc = image_classification()
 
     transformed_list = c_Imgc.transformed()
-    result_dict      = c_Imgc.evaluate_onebyone(transformed_list)
+    result_list      = c_Imgc.evaluate_onebyone(transformed_list)
+    result_dict      = c_Imgc.result_dict(result_list)
 
-    print('prediction result: {file : [prediction, score]}', result_dict)
+    print('prediction result: {file : [prediction, score]}\n', result_dict)
