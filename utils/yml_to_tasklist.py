@@ -9,7 +9,7 @@ def yml_to_tasklist(filepath):
 
         properties = yaml.load(f, Loader=yaml.FullLoader)
 
-        default_dict = {'batch_size': 0, 'epochs': 0, 'dataset': 0, 'num_classes': 0,
+        default_dict = {'batch_size': 0, 'epochs': 0, 'dataset': 0,
                         'net': 0, 'optimizer': 0, 'initial_lr': 0,}
         m_result = {}
         result = {}
