@@ -68,6 +68,15 @@ def save_data(data, path):
         df.to_csv(path, mode='a', header=False)
 
 
+def align_csv(path):
+    # path = "./result.csv"
+    data_frame = pd.read_csv(path)
+    data_frame = data_frame[['model', 'optimizer', 'initial_lr', 'initial_momentum',
+                             'epochs', 'train acc', 'val acc', 'test acc', 'time']]
+    data_frame.to_csv(path, mode='w')
+    return data_frame
+
+
 class Training:
     def __init__(self, options_dict, index_num, device, csv_path):
         self.start_epoch = 1
@@ -108,8 +117,8 @@ class Training:
 
         # # learning rate scheduler
         # lr_scheduler = set_lr_scheduler(optimizer=self.optimizer,
-        #                                         epochs=self.start_epoch + self.options_dict['epochs']
-        #                                         , last_ep=self.start_epoch - 1)
+        #                                 epochs=self.start_epoch + self.options_dict['epochs'],
+        #                                 last_ep=self.start_epoch - 1)
 
         self.current_data[self.index_num] = {
             'batch_size': self.options_dict['batch_size'],
@@ -156,5 +165,6 @@ class Training:
 
     def finish(self):
         torch.cuda.empty_cache()
+        align_csv(self.csv_path)
         send_alarm_to_slack(self.ckpt_info+" done")
         print("task done\n")
