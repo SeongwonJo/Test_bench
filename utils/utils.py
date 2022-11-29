@@ -72,7 +72,7 @@ def save_csv(data, path):
 
 
 def send_alarm_to_slack(msg):
-    url = "https://hooks.slack.com/services/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"
+    url = ""
 
     payload = {"text": msg}
 
