@@ -33,3 +33,37 @@ python main.py
 
 - 코드 수정 후 업데이트
 
+
+
+
+
+### Etc
+
+- 4k 해상도의 이미지를 사용하면 data loader에서 병목이 걸리므로 미리 이미지 크기를 조정한 데이터셋을 만들고 학습을 진행하는 것을 추천
+
+- img_resize.py 사용법
+
+  - -p 로 데이터셋 경로 지정 필요
+
+  - 다음과 같이 구성되어 있어야함
+
+    ```
+    dataset/ (입력한 경로)
+    ├── class A
+    │   ├── image1
+    │   ├── image2
+    │   └── ...
+    │    
+    └── class B
+        ├── image4
+        ├── image5
+        └── ...
+    ```
+
+  - 코드 사용 예시
+
+    ```
+    python img_resize.py -p "D:/dataset/"
+    ```
+
+    - 결과가 "기존폴더명(resize)" 에 저장됨
