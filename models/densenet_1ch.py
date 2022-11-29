@@ -223,6 +223,10 @@ def _densenet(
     return model
 
 
+def densenet121_2048(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> DenseNet:
+    return _densenet("densenet121", 64, (6, 12, 24, 16), 128, pretrained, progress, **kwargs)
+
+
 def densenet121(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> DenseNet:
     r"""Densenet-121 model from
     `"Densely Connected Convolutional Networks" <https://arxiv.org/pdf/1608.06993.pdf>`_.

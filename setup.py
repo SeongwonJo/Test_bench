@@ -1,408 +1,277 @@
+from email.policy import strict
 import torch
 import torch.nn as nn
 
 from torch import optim
-from torchvision import transforms, datasets
+from torchvision import datasets
 from torchvision.models import resnet, vgg, inception
 from torch.utils.data import DataLoader
-from torch.utils.data.sampler import SubsetRandomSampler
+from torch.utils import model_zoo
 
 from models import resnet_cifar10, densenet_1ch
+from utils.utils import custom_pil_loader, Transforms, train_val_split
+import classification_settings
 
-import albumentations as A
-from albumentations.pytorch import ToTensorV2
-
-import cv2
-import numpy as np
-from PIL import Image
+import math
+from torch.optim.lr_scheduler import _LRScheduler
 
 
-# augmentation
-# only ToTensor (mnist)
-common_transform = transforms.Compose([transforms.ToTensor()])
-
-# CIFAR-10, 100
-cifar10_transform = A.Compose(
-    [
-        A.PadIfNeeded(min_height=40, min_width=40),
-        A.RandomCrop(height=32, width=32),
-        A.HorizontalFlip(),
-        A.Normalize(mean=(0.4914, 0.4822, 0.4465), std=(0.2470, 0.2435, 0.2616)),
-        ToTensorV2(),
-    ]
-)
-
-cifar100_transform = A.Compose(
-    [
-        A.PadIfNeeded(min_height=40, min_width=40),
-        A.RandomCrop(height=32, width=32),
-        A.HorizontalFlip(),
-        A.Normalize(mean=(0.5071, 0.4867, 0.4408), std=(0.2675, 0.2565, 0.2761)),
-        ToTensorV2(),
-    ]
-)
-
-# ImageNet
-sample_list = list(range(256, 481))
-imagenet_transform = A.Compose(
-    [
-        A.SmallestMaxSize(max_size=sample_list),
-        A.HorizontalFlip(),
-        A.RandomCrop(height=224, width=224),
-        A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-        ToTensorV2(),
-    ]
-)
-# custom
-custom_transform = A.Compose(
-    [
-        A.Resize(height=256, width=256),
-        A.Rotate(10),
-        A.Normalize(mean=0.5, std=0.5),
-        ToTensorV2(),
-    ]
-)
+# imagenet pretrained model
+model_urls = {
+    "resnet50": "https://download.pytorch.org/models/resnet50-0676ba61.pth",
+    "densenet121": "https://download.pytorch.org/models/densenet121-a639ec97.pth",
+}
 
 
-# testdata setting
-cifar10_test = A.Compose(
-    [
-        A.Normalize(mean=(0.4914, 0.4822, 0.4465), std=(0.2470, 0.2435, 0.2616)),
-        ToTensorV2(),
-    ]
-)
+class MyDataset:
+    def __init__(
+        self, *, data_src=classification_settings.data_folder, batch_size, dataset
+    ):
+        self.dataset = dataset
+        self.data_src = data_src
+        self.batch_size = batch_size
 
-cifar100_test = A.Compose(
-    [
-        A.Normalize(mean=(0.5071, 0.4867, 0.4408), std=(0.2675, 0.2565, 0.2761)),
-        ToTensorV2(),
-    ]
-)
+    # dataset select
+    def load_dataset(self,):
+        if self.dataset == "custom":
+            my_dataset_root = {
+                "train": self.data_src + classification_settings.train_root,
+                "test": self.data_src + classification_settings.test_root,
+            }
+            my_transforms = {
+                "train": Transforms(classification_settings.custom_transform),
+                "test": Transforms(classification_settings.custom_test),
+            }
+            data_dict = {
+                "train": datasets.ImageFolder(
+                    root=my_dataset_root["train"],
+                    transform=my_transforms["train"],
+                    loader=custom_pil_loader,
+                ),
+                "val": datasets.ImageFolder(
+                    root=my_dataset_root["train"],
+                    transform=my_transforms["test"],
+                    loader=custom_pil_loader,
+                ),
+                "test": datasets.ImageFolder(
+                    root=my_dataset_root["test"],
+                    transform=my_transforms["test"],
+                    loader=custom_pil_loader,
+                ),
+            }
 
-imagenet_test = A.Compose(
-    [
-        A.Resize(height=256, width=256),
-        A.CenterCrop(height=224, width=224),
-        A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-        ToTensorV2(),
-    ]
-)
+            print("dataset load: ", len(data_dict["train"]))
+            sampler_dict = train_val_split(data_dict["train"])
 
-custom_test = A.Compose(
-    [
-        A.Resize(height=256, width=256),
-        A.Normalize(mean=0.5, std=0.5),
-        ToTensorV2(),
-    ]
-)
+            if sampler_dict["test"] != None:
+                test_count = len(sampler_dict["test"])
+            else:
+                test_count = len(data_dict["test"]) 
+                
+            print(
+                "train val split:\n",
+                "train:",
+                len(sampler_dict["train"]),
+                "|",
+                "val:",
+                len(sampler_dict["val"]),
+                "|",
+                "test:",
+                test_count
+            )
 
+            data_loaders = {
+                x: torch.utils.data.DataLoader(
+                    dataset=data_dict[x],
+                    batch_size=self.batch_size,
+                    sampler=sampler_dict[x],
+                    pin_memory=True,
+                    num_workers=4,
+                )
+                for x in ["train", "val", "test"]
+            }
+        else:
+            raise ValueError('please check your "dataset" input.')
 
-# apply albumentations on torch dataloader
-class Transforms:
-    def __init__(self, transforms: A.Compose):
-        self.transforms = transforms
-
-    def __call__(self, img, *args, **kwargs):
-        return self.transforms(image=np.array(img))['image']
-
-
-class Cifar10SearchDataset(datasets.CIFAR10):
-    def __init__(self, root,
-                 train=True, download=True, transform=None):
-        super().__init__(root=root, train=train, download=download, transform=transform)
-
-    def __getitem__(self, index):
-        image, label = self.data[index], self.targets[index]
-
-        if self.transform is not None:
-            transformed = self.transform(image=image)
-            image = transformed["image"]
-
-        return image, label
-
-
-class Cifar100SearchDataset(datasets.CIFAR100):
-    def __init__(self, root,
-                 train=True, download=True, transform=None):
-        super().__init__(root=root, train=train, download=download, transform=transform)
-
-    def __getitem__(self, index):
-        image, label = self.data[index], self.targets[index]
-
-        if self.transform is not None:
-            transformed = self.transform(image=image)
-            image = transformed["image"]
-
-        return image, label
-
-
-class ImageNetSearchDataset(datasets.ImageNet):
-    def __init__(self, root,
-                 split='train', transform=None):
-        super().__init__(root=root, split=split, transform=transform)
-
-    def __getitem__(self, index):
-        path, label = self.samples[index]
-        image = cv2.imread(path)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        if self.transform is not None:
-            transformed = self.transform(image=image)
-            image = transformed["image"]
-
-        return image, label
+        return data_loaders["train"], data_loaders["val"], data_loaders["test"]
 
 
-# load image on dataloader with grayscale
-def custom_pil_loader(path):
-    with open(path, 'rb') as f:
-        img = Image.open(f)
-        img.load()
-        return img.convert('L')
-
-
-# train_validation split sampler
-def train_val_split(dataset):
-    dataset_size =len(dataset)  # 전체크기
-    indices = list(range(dataset_size)) # 전체 인덱스 리스트만들고
-    split = int(np.floor(0.2*dataset_size)) # 내림함수로 20% 지점 인덱스
-    np.random.seed(42)
-    np.random.shuffle(indices) # 인덱스 리스트 섞어줌
-
-    # 섞어진 리스트에서 처음부터 ~번째 까지 val, ~+1번째부터 끝 인덱스까지 train
-    train_indices, val_indices = indices[split:], indices[:split]
-
-    train_sampler = SubsetRandomSampler(train_indices)
-    val_sampler = SubsetRandomSampler(val_indices)
-
-    return train_sampler, val_sampler
-
-
-# dataset select
-def load_dataset(*,data_src='/home/work/test1/data', batch_size, dataset) :
-    # train_loader = None
-    # test_loader = None
-    if dataset == 'mnist':
-        train_dataset = datasets.MNIST(root=data_src,train=True, transform=common_transform, download=True)
-        # val_dataset = datasets.MNIST(root=data_src,train=True, transform=common_transform, download=True)
-        train_sampler, val_sampler = train_val_split(train_dataset)
-
-        train_loader = torch.utils.data.DataLoader(
-            dataset=train_dataset, batch_size=batch_size, sampler=train_sampler, pin_memory=True, num_workers=4)
-        val_loader = torch.utils.data.DataLoader(
-            dataset=train_dataset, batch_size=batch_size, sampler=val_sampler, pin_memory=True, num_workers=4)
-        test_loader = torch.utils.data.DataLoader(
-            dataset=datasets.MNIST(root=data_src, train=False, transform=common_transform, download=True),
-            batch_size=batch_size)
-    elif dataset == 'cifar10':
-        train_dataset = Cifar10SearchDataset(root=data_src, train=True, transform=cifar10_transform)
-        val_dataset = Cifar10SearchDataset(root=data_src, train=True, transform=cifar10_test)
-        train_sampler, val_sampler = train_val_split(train_dataset)
-
-        train_loader = torch.utils.data.DataLoader(
-            dataset=train_dataset, batch_size=batch_size, sampler=train_sampler, pin_memory=True, num_workers=3)
-        val_loader = torch.utils.data.DataLoader(
-            dataset=val_dataset, batch_size=batch_size, sampler=val_sampler, pin_memory=True, num_workers=3)
-        test_loader = torch.utils.data.DataLoader(
-            dataset=Cifar10SearchDataset(root=data_src, train=False,transform=cifar10_test),
-            batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=3)
-    elif dataset == 'cifar100':
-        train_dataset = Cifar100SearchDataset(root=data_src, train=True, transform=cifar100_transform)
-        val_dataset = Cifar100SearchDataset(root=data_src, train=True, transform=cifar100_test)
-        train_sampler, val_sampler = train_val_split(train_dataset)
-
-        train_loader = torch.utils.data.DataLoader(
-            dataset=train_dataset, batch_size=batch_size, sampler=train_sampler, pin_memory=True, num_workers=3)
-        val_loader = torch.utils.data.DataLoader(
-            dataset=val_dataset, batch_size=batch_size, sampler=val_sampler, pin_memory=True, num_workers=3)
-        test_loader = torch.utils.data.DataLoader(
-            dataset=Cifar100SearchDataset(root=data_src, train=False, transform=cifar100_test),
-            batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=3)
-    elif dataset == 'imagenet':
-        train_dataset = ImageNetSearchDataset(root=data_src+'/imagenet', split='train',transform=imagenet_transform)
-        val_dataset = ImageNetSearchDataset(root=data_src+'/imagenet', split='train',transform=imagenet_test)
-        train_sampler, val_sampler = train_val_split(train_dataset)
-
-        train_loader = torch.utils.data.DataLoader(
-            dataset=train_dataset, batch_size=batch_size, sampler=train_sampler, pin_memory=True, num_workers=3)
-        val_loader = torch.utils.data.DataLoader(
-            dataset=val_dataset, batch_size=batch_size, sampler=val_sampler, pin_memory=True, num_workers=3)
-        test_loader = torch.utils.data.DataLoader(
-            dataset=ImageNetSearchDataset(root=data_src+'/imagenet', split='val',transform=imagenet_test),
-            batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=3)
-    elif dataset == 'custom':
-        train_dataset = datasets.ImageFolder(root=data_src+'/chest_xray/train',
-                                             transform=Transforms(custom_transform), loader=custom_pil_loader)
-        val_dataset = datasets.ImageFolder(root=data_src+'/chest_xray/train',
-                                           transform=Transforms(custom_test), loader=custom_pil_loader)
-        test_dataset = datasets.ImageFolder(root=data_src+'/chest_xray/test',
-                                         transform=Transforms(custom_test), loader=custom_pil_loader)
-        train_sampler, val_sampler = train_val_split(train_dataset)
-
-        train_loader = torch.utils.data.DataLoader(
-            dataset=train_dataset, batch_size=batch_size, sampler=train_sampler, pin_memory=True, num_workers=3)
-        val_loader = torch.utils.data.DataLoader(
-            dataset=val_dataset, batch_size=batch_size, sampler=val_sampler, pin_memory=True, num_workers=3)
-        test_loader = torch.utils.data.DataLoader(
-            dataset=test_dataset, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=3)
-    else:
-        raise ValueError('please check your "dataset" input.')
-
-    return train_loader, val_loader, test_loader
-
-
-# resnet200
-def resnet200(pretrained: bool = False, progress: bool = True, **kwargs) -> resnet.ResNet:
-    return resnet._resnet('resnet200', resnet.Bottleneck, [3, 24, 36, 3], pretrained, progress,
-                   **kwargs)
-
-
-# select model
-def select_model(net, dataset, device_num):
-    num_classes = {
-        'cifar10': 10,
-        'cifar100': 100,
-        'custom': 2,
-        'imagenet': 1000,
-        'mnist': 10
-    }.get(dataset, "error")
-    
-    if dataset == 'cifar10' or dataset == 'cifar100':
-        model = {
-            'resnet20': resnet_cifar10.resnet20(num_classes=num_classes),
-            'resnet32': resnet_cifar10.resnet32(num_classes=num_classes),
-            'resnet44': resnet_cifar10.resnet44(num_classes=num_classes),
-            'resnet56': resnet_cifar10.resnet56(num_classes=num_classes),
-            'resnet110': resnet_cifar10.resnet110(num_classes=num_classes),
-            'resnet152': resnet_cifar10.resnet152(num_classes=num_classes),
-            'resnet200': resnet_cifar10.resnet200(num_classes=num_classes),
-        }.get(net, "error")
-    else:
-        model = {
-            'resnet18': resnet.resnet18(num_classes=num_classes),
-            'resnet50': resnet.resnet50(num_classes=num_classes),
-            'resnet101': resnet.resnet101(num_classes=num_classes),
-            'resnet152': resnet.resnet152(num_classes=num_classes),
-            'resnet200': resnet200(num_classes=num_classes),
-            'vgg16': vgg.vgg16(num_classes=num_classes),
-            'densenet121': densenet_1ch.densenet121(num_classes=num_classes),
-            'densenet169': densenet_1ch.densenet169(num_classes=num_classes),
-            'densenet201': densenet_1ch.densenet201(num_classes=num_classes),
-        }.get(net, "error")
-
-    if model == "error":
-        raise ValueError('please check your "net" input.')
-
-    if dataset == 'mnist':
-        model.conv1 = nn.Conv2d(1, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
-    elif dataset == 'custom':
-        model.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
-
-    device = torch.device(device_num if torch.cuda.is_available() else "cpu")
-    model.to(device)
-    print("device:",device)
-
-    # parallel processing (under construction)
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # if torch.cuda.device_count() > 1:
-    #     model = nn.DataParallel(model).cuda()
-
-    return model, device
-
-
-class MyOptimizer:
-    def __init__(self, net, lr, momentum):
+class Initializer:
+    def __init__(self, net, lr=0.1, momentum=0.9, dataset=None, device_num="cuda:0"):
         self.net = net
-        self.lr = lr
-        self.momentum = momentum
+        # self.lr = lr
+        # self.momentum = momentum
+        self.dataset = dataset
+        self.device_num = device_num
+        _model, _device = self.select_model(pretrained=classification_settings.use_pretrained)
+        self.model = _model
+        self.device = _device
 
-    def SGD(self):
-        return MySGD(self.net.parameters(), lr=self.lr, momentum=self.momentum, weight_decay=0.0005)
-
-    def Adam(self):
-        return optim.Adam(self.net.parameters(), lr=self.lr, weight_decay=0.001)  # default lr = 0.001
-
-    def Nesterov(self):
-        return optim.SGD(self.net.parameters(), lr=self.lr, momentum=self.momentum, weight_decay=0.0005, nesterov=True)
-
-    def RMSprop(self):
-        return optim.RMSprop(self.net.parameters(), lr=self.lr)  # default lr = 0.01
+        self.optimizer = MyOptimizer(self.model, lr, momentum)
 
     def select_optimizer(self, opt):
         switch_case = {
-            "SGD": self.SGD(),
-            "Adam": self.Adam(),
-            "NAG": self.Nesterov(),
-            "RMSprop": self.RMSprop(),
+            "SGD": self.optimizer.SGD(),
+            "Adam": self.optimizer.Adam(),
+            "NAG": self.optimizer.Nesterov(),
+            "RMSprop": self.optimizer.RMSprop(),
         }.get(opt, "error")
 
         if switch_case == "error":
             raise ValueError('please check your "opt" input.')
         return switch_case
 
+    def select_model(self, pretrained=False):
+        num_classes = {"custom": classification_settings.num_classes,}.get(
+            self.dataset, "error"
+        )
 
-class MySGD(optim.Optimizer):
-    def __init__(self, params, lr=0.1, momentum=0.0, weight_decay=0.0, nesterov=False):
-        defaults = dict(lr=lr, momentum=momentum, weight_decay=weight_decay, nesterov=nesterov)
-        super(MySGD, self).__init__(params, defaults)
+        model = {
+            "resnet18": resnet.resnet18(num_classes=num_classes),
+            "resnet50": resnet.resnet50(num_classes=num_classes),
+            "resnet101": resnet.resnet101(num_classes=num_classes),
+            "resnet152": resnet.resnet152(num_classes=num_classes),
+            "resnet200": resnet200(num_classes=num_classes),
+            "vgg16": vgg.vgg16(num_classes=num_classes),
+            "densenet121": densenet_1ch.densenet121(num_classes=num_classes),
+            "densenet169": densenet_1ch.densenet169(num_classes=num_classes),
+            "densenet201": densenet_1ch.densenet201(num_classes=num_classes),
+            "densenet121_2048": densenet_1ch.densenet121_2048(num_classes=num_classes),
+        }.get(self.net, "error")
 
-    def __setstate__(self, state):
-        super(MySGD, self).__setstate__(state)
+        if model == "error":
+            raise ValueError('please check your "net" input.')
 
-    @torch.no_grad()
-    def step(self):
-        loss = None
+        if self.dataset == "custom" and self.net[0:6] == "resnet":
+            model.conv1 = nn.Conv2d(
+                1, 64, kernel_size=7, stride=2, padding=3, bias=False
+            )
 
-        for group in self.param_groups:
-            params_with_grad = []
-            d_p_list = [] # grad 값들
-            momentum_buffer_list = []
-            weight_decay = group['weight_decay']
-            momentum = group['momentum']
-            # dampening = group['dampening']
-            # nesterov = group['nesterov']
-            lr = group['lr']
+        if pretrained:
+            self.model_ = model
+            self._load_pretrained(url="TODO")
+            model = self.model_
+            print("Pretrained weight applied.")
 
-            for p in group['params']:
-                if p.grad is not None:
-                    params_with_grad.append(p)
-                    d_p_list.append(p.grad)
+        device = torch.device(self.device_num if torch.cuda.is_available() else "cpu")
+        model.to(device)
+        print("device:", device)
 
-                    state = self.state[p]
-                    if 'momentum_buffer' not in state:
-                        momentum_buffer_list.append(None)
-                    else:
-                        momentum_buffer_list.append(state['momentum_buffer'])
+        # parallel processing (under construction)
+        # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # if torch.cuda.device_count() > 1:
+        #     model = nn.DataParallel(model).cuda()
 
-            #sgd
-            for i, param in enumerate(params_with_grad):
-                d_p = d_p_list[i]
-                if weight_decay != 0:
-                    d_p = d_p.add(param, alpha=weight_decay)
+        return model, device
 
-                if momentum != 0:
-                    buf = momentum_buffer_list[i]
+    def _load_pretrained(self, url, inchans=1):
+        _ = url
+        model_now = "mymodel"
+        # state_dict = model_zoo.load_url(url)
+        # state_dict = torch.hub.load_state_dict_from_url(url)
+        ####
+        # _pre_model = torch.load("./resnet50-0676ba61.pth")
+        _pre_model = torch.load("./snudata_1024_nrt-aug_batch64_g05.pt", map_location='cuda:0')
 
-                    if buf is None:
-                        buf = torch.clone(d_p).detach() # 복사하고 gradient가 없는 tensor로 만듬
-                        momentum_buffer_list[i] = buf # 초기값, buf가 식에서 v 인듯
-                    else:
-                        buf.mul_(momentum).add_(d_p, alpha=1) # \mu v + g
+        # for k,v in _pre_model.items():
+        #     print(k)
+        ####
+        # _pre_model.fc = nn.Linear(2048, 2)
+        pretrained_dict = _pre_model
 
-                    d_p = buf
-                    # if nesterov:
-                    #     d_p = d_p.add(buf, alpha=momentum) # g + \mu v
+        state_dict = pretrained_dict
 
-                param.add_(d_p, alpha=-lr) # w - lr * g
-                # Dataloader 에서 batch_size, shuffle 정할 수 있으므로
-                # batch_size 때문에 w = w - lr * sum_i=1^batchsize g_i 라고할수있다.(minibatch SGD)
-                # shuffle 이 random sampling 을 맡는다고 생각하면 될듯
+        # # eliminate classifier weights
+        # if model_now == "resnet":
+        #     state_dict_ = {k: v for k, v in pretrained_dict.items() if k != "fc.weight"}
+        #     state_dict = {k: v for k, v in state_dict_.items() if k != "fc.bias"}
+        # elif model_now == "densenet":
+        #     state_dict_ = {
+        #         k: v for k, v in pretrained_dict.items() if k != "classifier.weight"
+        #     }
+        #     state_dict = {
+        #         k: v for k, v in state_dict_.items() if k != "classifier.bias"
+        #     }
 
-            # update momentum_buffers
-            for p, momentum_buffer in zip(params_with_grad, momentum_buffer_list):
-                state = self.state[p]
-                state['momentum_buffer'] = momentum_buffer
+        # if inchans == 1 and model_now == "resnet":
+        #     conv1_weight = state_dict["conv1.weight"]
+        #     state_dict["conv1.weight"] = conv1_weight.sum(dim=1, keepdim=True)
+        # elif inchans == 1 and model_now == "densenet":
+        #     conv0_weight = state_dict["features.conv0.weight"]
+        #     state_dict["features.conv0.weight"] = conv0_weight.sum(dim=1, keepdim=True)
+        # elif inchans != 1:
+        #     assert False, "Invalid number of inchans for pretrained weights"
+        self.model_.load_state_dict(state_dict, strict=False)
 
-        return loss
+    def select_lossfunction(self, l_func):
+        switch_case = {
+            "CE": nn.CrossEntropyLoss(label_smoothing=0.1),
+            "FL": FocalLoss(),
+        }.get(l_func, "error")
+
+        if switch_case == "error":
+            raise ValueError("please check your (loss function) input.")
+        return switch_case
+
+
+class MyOptimizer:
+    def __init__(self, model, lr, momentum):
+        self.model = model
+        self.lr = lr
+        self.momentum = momentum
+
+    def SGD(self):
+        return optim.SGD(
+            self.model.parameters(),
+            lr=self.lr,
+            momentum=self.momentum,
+            weight_decay=0.0001,
+        )
+
+    def Adam(self):
+        return optim.Adam(
+            self.model.parameters(), lr=self.lr, weight_decay=0.0001
+        )  # default lr = 0.001
+
+    def Nesterov(self):
+        return optim.SGD(
+            self.model.parameters(),
+            lr=self.lr,
+            momentum=self.momentum,
+            weight_decay=0.0005,
+            nesterov=True,
+        )
+
+    def RMSprop(self):
+        return optim.RMSprop(self.model.parameters(), lr=self.lr)  # default lr = 0.01
+
+
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=0.25, gamma=2, logits=False, reduce=True):
+        super(FocalLoss, self).__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.logits = logits
+        self.reduce = reduce
+
+    def forward(self, inputs, targets):
+        ce_loss_ = nn.CrossEntropyLoss(reduction="none")
+        ce_loss = ce_loss_(inputs, targets)
+        pt = torch.exp(-ce_loss)
+        F_loss = self.alpha * (1 - pt) ** self.gamma * ce_loss
+        if self.reduce:
+            return torch.mean(F_loss)
+        else:
+            return F_loss
+
+
+# resnet200
+def resnet200(
+    pretrained: bool = False, progress: bool = True, **kwargs
+) -> resnet.ResNet:
+    return resnet._resnet(
+        "resnet200", resnet.Bottleneck, [3, 24, 36, 3], pretrained, progress, **kwargs
+    )
 
 
 def set_lr_scheduler(optimizer, epochs, last_ep):
@@ -416,7 +285,90 @@ def set_lr_scheduler(optimizer, epochs, last_ep):
     #                        momentum_lambda=lambda epoch: 1 if (epoch // decay_step) == 0 else 9
     #                        if (epoch // decay_step) > 8 else 1 * (epoch // decay_step + 1))
 
-    lr_scheduler = optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=decay_step, gamma=1, last_epoch=last_ep)
+    # lr_scheduler = optim.lr_scheduler.StepLR(
+    #     optimizer=optimizer, step_size=decay_step, gamma=1, last_epoch=last_ep
+    # )
 
     # lr_scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=200, T_mult=1, eta_min=0)
+    lr_scheduler = CosineAnnealingWarmUpRestarts(
+        optimizer, T_0=100, T_mult=2, eta_max=0.0002, T_up=10, gamma=0.5
+    )
     return lr_scheduler
+
+
+class CosineAnnealingWarmUpRestarts(_LRScheduler):
+    def __init__(
+        self, optimizer, T_0, T_mult=1, eta_max=0.1, T_up=0, gamma=1.0, last_epoch=-1
+    ):
+        if T_0 <= 0 or not isinstance(T_0, int):
+            raise ValueError("Expected positive integer T_0, but got {}".format(T_0))
+        if T_mult < 1 or not isinstance(T_mult, int):
+            raise ValueError("Expected integer T_mult >= 1, but got {}".format(T_mult))
+        if T_up < 0 or not isinstance(T_up, int):
+            raise ValueError("Expected positive integer T_up, but got {}".format(T_up))
+        self.T_0 = T_0
+        self.T_mult = T_mult
+        self.base_eta_max = eta_max
+        self.eta_max = eta_max
+        self.T_up = T_up
+        self.T_i = T_0
+        self.gamma = gamma
+        self.cycle = 0
+        self.T_cur = last_epoch
+        super(CosineAnnealingWarmUpRestarts, self).__init__(optimizer, last_epoch)
+
+    def get_lr(self):
+        if self.T_cur == -1:
+            return self.base_lrs
+        elif self.T_cur < self.T_up:
+            return [
+                (self.eta_max - base_lr) * self.T_cur / self.T_up + base_lr
+                for base_lr in self.base_lrs
+            ]
+        else:
+            return [
+                base_lr
+                + (self.eta_max - base_lr)
+                * (
+                    1
+                    + math.cos(
+                        math.pi * (self.T_cur - self.T_up) / (self.T_i - self.T_up)
+                    )
+                )
+                / 2
+                for base_lr in self.base_lrs
+            ]
+
+    def step(self, epoch=None):
+        if epoch is None:
+            epoch = self.last_epoch + 1
+            self.T_cur = self.T_cur + 1
+            if self.T_cur >= self.T_i:
+                self.cycle += 1
+                self.T_cur = self.T_cur - self.T_i
+                self.T_i = (self.T_i - self.T_up) * self.T_mult + self.T_up
+        else:
+            if epoch >= self.T_0:
+                if self.T_mult == 1:
+                    self.T_cur = epoch % self.T_0
+                    self.cycle = epoch // self.T_0
+                else:
+                    n = int(
+                        math.log(
+                            (epoch / self.T_0 * (self.T_mult - 1) + 1), self.T_mult
+                        )
+                    )
+                    self.cycle = n
+                    self.T_cur = epoch - self.T_0 * (self.T_mult ** n - 1) / (
+                        self.T_mult - 1
+                    )
+                    self.T_i = self.T_0 * self.T_mult ** (n)
+            else:
+                self.T_i = self.T_0
+                self.T_cur = epoch
+
+        self.eta_max = self.base_eta_max * (self.gamma ** self.cycle)
+        self.last_epoch = math.floor(epoch)
+        for param_group, lr in zip(self.optimizer.param_groups, self.get_lr()):
+            param_group["lr"] = lr
+
