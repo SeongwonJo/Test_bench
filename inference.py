@@ -19,8 +19,9 @@ import os
 import torch
 from torchvision import datasets
 from torch.utils.data import DataLoader
+import pprint
 
-from utils.utils import yml_to_dict, custom_pil_loader
+from utils.utils import yml_to_dict, custom_pil_loader, Transforms
 from setup import Initializer, MyDataset
 from trainer import evaluate
 import classification_settings
@@ -32,11 +33,12 @@ def ArgumentParse(_intro_msg, L_Param, bUseParam=False):
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=textwrap.dedent(_intro_msg))
 
-    parser.add_argument('-y', '--yml_path', default="./inference_settings.yml",
+    parser.add_argument('-y', '--yml_path', default="./train_options.yml",
                         help="path to yml file contains options")
     parser.add_argument('-i', '--image_path', default="./test2")
-    parser.add_argument('-o', '--operation', default="all")
+    parser.add_argument('-o', '--order', default="all")
     parser.add_argument('-d', '--device', default="cuda:0")
+    parser.add_argument('-p', '--pt_path', required=True ,help="please input pt file path")
 
     args = parser.parse_args()
     return args
@@ -45,27 +47,29 @@ def ArgumentParse(_intro_msg, L_Param, bUseParam=False):
 class Inference:
     def __init__(self, L_Param=None):
         self.args       = ArgumentParse(_description, L_Param, bUseParam=False)
+        # self.args       = ArgumentParse()
+        self.o_dict     = yml_to_dict(self.args.yml_path)['parameters']
 
         _model, _device = self.initialization(device=self.args.device)
         self.model      = _model
         self.device     = _device
 
-    @staticmethod
-    def initialization(device):
-        initializer = Initializer(net=classification_settings.infer_net,
-                                  dataset=classification_settings.infer_dataset,
+    def initialization(self, device):
+        initializer = Initializer(net=self.o_dict['net'][0],
+                                  dataset=self.o_dict['dataset'][0],
                                   device_num=device)
         model = initializer.model
         device = initializer.device
-        model.load_state_dict(torch.load(classification_settings.infer_pt_path,
+        model.load_state_dict(torch.load(self.args.pt_path,
                                          map_location=device)['model_state_dict'], strict=False)
 
         return model, device
 
     @staticmethod
-    def torch_transformed(root="./test", batch_size=16):
+    def loader_with_transforms(root="./test", batch_size=16):
         my_dataset_root = root
-        _transforms = classification_settings.transforms_T
+        # _transforms = classification_settings.transforms_T
+        _transforms = Transforms(classification_settings.custom_test)
 
         # data_path == image folder path
         dataset = datasets.ImageFolder(root=my_dataset_root,
@@ -77,12 +81,24 @@ class Inference:
 
     # class 폴더에 분류가 되어있는 경우
     def operation_all(self):
-        data_loader = self.torch_transformed(root=self.args.image_path)
-        test_accuracy = evaluate(self.model, data_loader, self.device)
-        print('prediction Accuracy: {:.2f}%'.format(test_accuracy))
+        data_loader = self.loader_with_transforms(root=self.args.image_path)
+        test_accuracy, report , _l = evaluate(self.model, data_loader, self.device, is_test=True)
+        print("=============================================")
+        # pprint.pprint(report)
+        print('prediction Accuracy: {:.2f}%'.format(report['accuracy']*100))
+        print("=============================================")
+        print('details')
+        print("---------------------------------------------")
+        print('NORMAL')
+        pprint.pprint(report['NORMAL'])
+        print("\n")
+        print('PNEUMONIA')
+        pprint.pprint(report['PNEUMONIA'])
+        print("=============================================")
+
 
     def operation_onebyone(self):
-        _transforms = classification_settings.transforms_T
+        _transforms = Transforms(classification_settings.custom_test)
 
         f_list = os.listdir(self.args.image_path)
         transformed_list = []
@@ -100,17 +116,20 @@ class Inference:
 
         with torch.no_grad():
             for data in transformed_list:
-                output = self.model(data.unsqueeze(0).to(self.device))
+                output = self.model(data.unsqueeze(0).float().to(self.device))
 
                 _score, predicted = output.max(1)
                 pred = label_tags[predicted.item()]
                 r_list.append([pred, _score.item()])
 
         r_dict = dict(zip(f_list, r_list))
-        print('prediction result: {file : [prediction, score]}\n', r_dict)
+        print('prediction result: {file : [prediction, score]}\n')
+        print("="*80)
+        pprint.pprint(r_dict)
+        print("="*80)
 
     def operation_one_image(self):
-        _transforms = classification_settings.transforms_T
+        _transforms = Transforms(classification_settings.custom_test)
         img = custom_pil_loader(self.args.image_path)
         transformed = _transforms(img)
 
@@ -121,7 +140,7 @@ class Inference:
         self.model.eval()
 
         with torch.no_grad():
-            output = self.model(transformed.unsqueeze(0).to(self.device))
+            output = self.model(transformed.unsqueeze(0).float().to(self.device))
 
             _score, predicted = output.max(1)
             pred = label_tags[predicted.item()]
@@ -129,11 +148,19 @@ class Inference:
         print('prediction result: %s  Score: %f' %(pred, _score))
 
     def selected_operation(self,):
-        ops = {
-            'all': self.operation_all(),
-            'onebyone': self.operation_onebyone(),
-            'one': self.operation_one_image()
-        }.get(self.args.operation, "Please check 'operation' input.")
+        if self.args.order == 'all':
+            self.operation_all()
+        elif self.args.order == "onebyone":
+            self.operation_onebyone()
+        elif self.args.order == "one":
+            self.operation_one_image()
+        else:
+            print("Please check 'operation' input.")
+        # ops = {
+        #     'all': self.operation_all(),
+        #     'onebyone': self.operation_onebyone(),
+        #     'one': self.operation_one_image()
+        # }.get(self.args.order, "Please check 'operation' input.")
 
 
 if __name__ == '__main__':
