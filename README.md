@@ -26,16 +26,71 @@ python main.py
 
 - classification_settings.py 에서 데이터 경로, augmentation 설정, scheduler 사용 등 수정 가능
 
-
 <br><br>
 
 ### Inference
 
-- 코드 수정 후 업데이트
+- __Arguments__
+
+  * -y 로 학습할때 사용한 옵션 yaml 파일 입력필수 (기본값: train_options.yml)
+
+  * -i 로 추론할 이미지 경로 설정
+
+  * -o 로 옵션설정 (all, one, onebyone)
+
+    
+
+- 데이터 세트에 대한 추론 정확도 출력
+
+  1. 테스트할 이미지들이 들어있는 폴더를 argument로 입력
+
+     - 폴더의 안에 이미지 파일이 각 클래스 폴더에 들어가있어야 함
+
+     - ```
+       test/
+       ├── NORMAL
+       │   ├── 1.jpeg
+       │   ├── 2.jpeg
+       │   └── ...
+       │    
+       └── PNEUMONIA
+           ├── 4.jpeg
+           ├── 5.jpeg
+           └── ...
+       ```
+
+  ```sh
+  python inference.py -i './test' -o 'all'
+  ```
 
 
 
 
+- 하나의 이미지에 대한 추론 결과 출력
+
+  1. 테스트할 이미지의 경로를 argument로 입력
+
+  ```sh
+  python inference_one_image.py -i './test/BACTERIA-134339-0001.jpeg' -o 'one'
+  ```
+
+<br>
+
+- 폴더 안의 모든 이미지에 대한 결과를 dictionary로 출력
+
+  1. 폴더 경로 argument로 입력
+
+  ```sh
+  python inference_folder.py -i './test' -o 'onebyone'
+  ```
+
+<br>
+
+- 입력되는 데이터셋은 256x256 크기 이미지로 변환됨
+
+- 가독성 개선 예정 ..
+
+  
 
 ### Etc
 
