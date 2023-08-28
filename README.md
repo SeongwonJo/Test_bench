@@ -28,69 +28,114 @@ python main.py
 
 <br><br>
 
+
+
 ### Inference
 
 - __Arguments__
 
-  * -y 로 학습할때 사용한 옵션 yaml 파일 입력필수 (기본값: train_options.yml)
+  * -y : __학습할때 사용한 옵션 yaml 파일__ 입력필수 (기본값: train_options.yml)
 
-  * -i 로 추론할 이미지 경로 설정
+    * 학습, 추론시 크기조정, torch tensor 로 변환은 __classification_settings.py__ 의 __custom_transform__, __custom_test__ 에 설정되어 있으므로 필요시 변경
 
-  * -o 로 옵션설정 (all, one, onebyone)
+  * -i : 추론할 이미지 경로 설정
+
+  * -p : 추론에 사용할 pt 파일 경로 설정
+
+  * -m : 사용할 모델명 입력 (하단에 리스트)
+
+  * -o : 방식 설정 (all, one, onebyone)
+
+  * -d : 사용할 장치의 번호 설정
+
+    * 기본값 :  "cuda:0" 에 해당하는 장치 사용
+
+  * --save_dict : __onebyone__ 사용시 결과를 csv로 저장
 
     
 
-- 데이터 세트에 대한 추론 정확도 출력
+- 데이터 세트에 대한 추론 정확도 출력 ( __-o 'all' __)
 
-  1. 테스트할 이미지들이 들어있는 폴더를 argument로 입력
+  - 추론할 이미지들이 들어있는 폴더로 경로 입력
 
-     - 폴더의 안에 이미지 파일이 각 클래스 폴더에 들어가있어야 함
+  - 폴더의 안에 이미지 파일이 각 클래스 폴더에 들어가있어야 함
 
-     - ```
-       test/
-       ├── NORMAL
-       │   ├── 1.jpeg
-       │   ├── 2.jpeg
-       │   └── ...
-       │    
-       └── PNEUMONIA
-           ├── 4.jpeg
-           ├── 5.jpeg
-           └── ...
-       ```
+  - ```
+    test/
+    ├── NORMAL
+    │   ├── 1.jpeg
+    │   ├── 2.jpeg
+    │   └── ...
+    │    
+    └── PNEUMONIA
+        ├── 4.jpeg
+        ├── 5.jpeg
+        └── ...
+    ```
 
-  ```sh
-  python inference.py -i './test' -o 'all'
-  ```
+  - 사용 예시
 
+    ```sh
+    python inference.py -i './test' -o 'all' -p 'weights.pt' -m resnet18
+    ```
 
+  - 결과 출력
 
-
-- 하나의 이미지에 대한 추론 결과 출력
-
-  1. 테스트할 이미지의 경로를 argument로 입력
-
-  ```sh
-  python inference_one_image.py -i './test/BACTERIA-134339-0001.jpeg' -o 'one'
-  ```
-
-<br>
-
-- 폴더 안의 모든 이미지에 대한 결과를 dictionary로 출력
-
-  1. 폴더 경로 argument로 입력
-
-  ```sh
-  python inference_folder.py -i './test' -o 'onebyone'
-  ```
-
-<br>
-
-- 입력되는 데이터셋은 256x256 크기 이미지로 변환됨
-
-- 가독성 개선 예정 ..
+    - 예측 정확도, 각 클래스에 대한 f1-score, precision, recall, 이미지갯수를 출력함 
 
   
+
+
+
+
+- 하나의 이미지에 대한 추론 결과 출력 (__-o 'one'__)
+
+  - 추론할 이미지의 경로 입력
+  - 사용 예시
+
+  ```sh
+  python inference.py -i './test/BACTERIA-134339-0001.jpeg' -o 'one' -p 'weights.pt' -m resnet18
+  ```
+
+  - 결과 출력
+
+    - 추론 결과, softmax 값 출력 
+
+      
+
+<br>
+
+- 폴더 안의 모든 이미지에 대한 결과 출력 (__-o 'onebyone'__)
+
+  - 폴더 경로 입력
+  - 사용 예시
+
+  ```sh
+  python inference.py -i './test' -o 'onebyone' -p 'weights.pt' -m resnet18
+  ```
+
+  - 결과 출력
+    - 이미지 갯수, 각 클래스로 분류된 이미지 갯수 출력
+    - 사용 예시에 --save_dict 추가하면 각 이미지의 추론 결과, softmax 값을 csv 로 저장
+      - infer_result.csv 로 저장됨
+
+<br>
+
+- -m 옵션으로 들어가는 모델명 목록
+  - resnet18
+  - resnet50
+  - resnet101
+  - resnet152
+  - vgg16
+  - densenet121
+  - densenet169
+  - densenet201
+  - densenet121_2048
+    - fc layer 길이를 2048 로 늘린 모델
+
+
+
+
 
 ### Etc
 
