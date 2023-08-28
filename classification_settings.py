@@ -14,7 +14,8 @@ test_root = "/chest_xray/test/"
 lr_scheduler = True
 
 # load state dict from model
-use_pretrained = True
+use_pretrained = False
+pre_model_path = ""
 
 # augmentation
 # custom

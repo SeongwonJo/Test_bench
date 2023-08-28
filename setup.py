@@ -131,7 +131,6 @@ class Initializer:
             "resnet50": resnet.resnet50(num_classes=num_classes),
             "resnet101": resnet.resnet101(num_classes=num_classes),
             "resnet152": resnet.resnet152(num_classes=num_classes),
-            "resnet200": resnet200(num_classes=num_classes),
             "vgg16": vgg.vgg16(num_classes=num_classes),
             "densenet121": densenet_1ch.densenet121(num_classes=num_classes),
             "densenet169": densenet_1ch.densenet169(num_classes=num_classes),
@@ -171,7 +170,7 @@ class Initializer:
         # state_dict = torch.hub.load_state_dict_from_url(url)
         ####
         # _pre_model = torch.load("./resnet50-0676ba61.pth")
-        _pre_model = torch.load("./snudata_1024_nrt-aug_batch64_g05.pt", map_location='cuda:0')
+        _pre_model = torch.load(classification_settings.pre_model_path, map_location='cuda:0')
 
         # for k,v in _pre_model.items():
         #     print(k)
@@ -263,15 +262,6 @@ class FocalLoss(nn.Module):
             return torch.mean(F_loss)
         else:
             return F_loss
-
-
-# resnet200
-def resnet200(
-    pretrained: bool = False, progress: bool = True, **kwargs
-) -> resnet.ResNet:
-    return resnet._resnet(
-        "resnet200", resnet.Bottleneck, [3, 24, 36, 3], pretrained, progress, **kwargs
-    )
 
 
 def set_lr_scheduler(optimizer, epochs, last_ep):
