@@ -2,16 +2,16 @@
 # -*- coding: utf-8 -*-
 ###########################################################################
 # Pytorch - Medical Chest X-ray classification Test
-# 2020 07 31 by Seongwon Jo
+# 2023 08 28 by Seongwon Jo
 ###########################################################################
 _description = '''\
 ====================================================
 inference.py : T
-                    Written by Seongwon Jo @ 2022-07-31
+                    Written by Seongwon Jo @ 2023-08-28
 ====================================================
-Example : python inference.py -o "all" -i ./test2
-          python inference.py -o "onebyone" -i ./test
-          python inference.py -o "one" -i ./test/BACTERIA-134339-0001.jpeg  
+Example : python inference.py -i './test/' -o 'all' -p 'weights.pt' -m resnet18
+          python inference.py -i './test/NORMAL/1.jpeg' -o 'one' -p 'weights.pt' -m resnet18
+          python inference.py -i './test/NORMAL/' -o 'onebyone' -p 'weights.pt' -m resnet18 --save_dict 
 '''
 import argparse
 import textwrap
