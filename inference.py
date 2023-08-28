@@ -19,12 +19,30 @@ import os
 import torch
 from torchvision import datasets
 from torch.utils.data import DataLoader
+from torchvision.transforms import Compose, Normalize, ToTensor
 import pprint
+import pandas as pd
+import numpy as np
 
-from utils.utils import yml_to_dict, custom_pil_loader, Transforms
+from pytorch_grad_cam import GradCAM
+from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
+from pytorch_grad_cam.utils.image import show_cam_on_image
+
+from utils.utils import yml_to_dict, custom_pil_loader, Transforms, save_csv
 from setup import Initializer, MyDataset
 from trainer import evaluate
 import classification_settings
+
+
+def preprocess_image(
+    img: np.ndarray, mean=[
+        0.5,], std=[
+            0.5,]) -> torch.Tensor:
+    preprocessing = Compose([
+        ToTensor(),
+        Normalize(mean=mean, std=std)
+    ])
+    return preprocessing(img.copy()).unsqueeze(0)
 
 
 def ArgumentParse(_intro_msg, L_Param, bUseParam=False):
@@ -33,12 +51,13 @@ def ArgumentParse(_intro_msg, L_Param, bUseParam=False):
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=textwrap.dedent(_intro_msg))
 
-    parser.add_argument('-y', '--yml_path', default="./train_options.yml",
-                        help="path to yml file contains options")
+    # parser.add_argument('-y', '--yml_path', default="./train_options.yml",
+    #                     help="path to yml file contains options")
     parser.add_argument('-i', '--image_path', default="./test2")
     parser.add_argument('-o', '--order', default="all")
     parser.add_argument('-d', '--device', default="cuda:0")
     parser.add_argument('-p', '--pt_path', required=True ,help="please input pt file path")
+    parser.add_argument('-m', '--model', required=True ,help="what model ?")
 
     args = parser.parse_args()
     return args
@@ -48,20 +67,20 @@ class Inference:
     def __init__(self, L_Param=None):
         self.args       = ArgumentParse(_description, L_Param, bUseParam=False)
         # self.args       = ArgumentParse()
-        self.o_dict     = yml_to_dict(self.args.yml_path)['parameters']
+        # self.o_dict     = yml_to_dict(self.args.yml_path)['parameters']
 
         _model, _device = self.initialization(device=self.args.device)
         self.model      = _model
         self.device     = _device
 
     def initialization(self, device):
-        initializer = Initializer(net=self.o_dict['net'][0],
-                                  dataset=self.o_dict['dataset'][0],
+        initializer = Initializer(net=self.args.model,
+                                  dataset="custom",
                                   device_num=device)
         model = initializer.model
         device = initializer.device
         model.load_state_dict(torch.load(self.args.pt_path,
-                                         map_location=device)['model_state_dict'], strict=False)
+                                         map_location=device)['model_state_dict'], strict=True)
 
         return model, device
 
@@ -120,13 +139,34 @@ class Inference:
 
                 _score, predicted = output.max(1)
                 pred = label_tags[predicted.item()]
-                r_list.append([pred, _score.item()])
+
+                # _score_p = torch.softmax(output).max(1)
+                r_list.append([pred, torch.softmax(output, dim=1).max().cpu()])
 
         r_dict = dict(zip(f_list, r_list))
-        print('prediction result: {file : [prediction, score]}\n')
-        print("="*80)
-        pprint.pprint(r_dict)
-        print("="*80)
+        path = './infer_result.csv'
+        df = pd.DataFrame(r_dict)
+        df = df.transpose()
+        df.columns = ['predict', 'softmax value']
+        if not os.path.exists(path):
+            df.to_csv(path, mode="w")
+        else:
+            df.to_csv(path, mode="a", header=False)
+
+        # print('prediction result: {file : [prediction, score]}\n')
+        # print("="*80)
+        # pprint.pprint(r_dict)
+        # print("="*80)
+
+        n = 0
+        p = 0
+        for k, v in r_dict.items():
+            if v[0] == "Normal":
+                n += 1
+            else:
+                p += 1
+
+        print("# of images: ", len(r_dict), "\nNormal: ", n, "\nPneumonia: ", p)
 
     def operation_one_image(self):
         _transforms = Transforms(classification_settings.custom_test)
@@ -139,6 +179,11 @@ class Inference:
         }
         self.model.eval()
 
+        target_layers = [self.model.features[-1]] # densenet
+        cam = GradCAM(model=self.model, target_layers=target_layers, use_cuda=True)
+        targets = [ClassifierOutputTarget(1)]
+        grayscale_cam = cam(input_tensor=transformed.unsqueeze(0).float().to(self.device), targets=targets)
+
         with torch.no_grad():
             output = self.model(transformed.unsqueeze(0).float().to(self.device))
 
@@ -146,6 +191,11 @@ class Inference:
             pred = label_tags[predicted.item()]
 
         print('prediction result: %s  Score: %f' %(pred, _score))
+        print('softmax result : ', torch.softmax(output, dim=1))
+
+        grayscale_cam = grayscale_cam[0, :]
+        base_img = preprocess_image(img)
+        visualization = show_cam_on_image(base_img, grayscale_cam, use_rgb=False)
 
     def selected_operation(self,):
         if self.args.order == 'all':
@@ -161,6 +211,8 @@ class Inference:
         #     'onebyone': self.operation_onebyone(),
         #     'one': self.operation_one_image()
         # }.get(self.args.order, "Please check 'operation' input.")
+
+
 
 
 if __name__ == '__main__':
