@@ -7,6 +7,7 @@ chest x-ray image classfication with PyTorch
 ## Usage
 
 code examples
+<br><br>
 
 ### Training
 
@@ -52,7 +53,7 @@ python main.py
 
   * --save_dict : __onebyone__ 사용시 결과를 csv로 저장
 
-    
+<br><br>
 
 - 데이터 세트에 대한 추론 정확도 출력 ( __-o 'all' __)
 
@@ -76,17 +77,14 @@ python main.py
   - 사용 예시
 
     ```sh
-    python inference.py -i './test' -o 'all' -p 'weights.pt' -m resnet18
+    python inference.py -i './test/' -o 'all' -p 'weights.pt' -m resnet18
     ```
 
   - 결과 출력
 
     - 예측 정확도, 각 클래스에 대한 f1-score, precision, recall, 이미지갯수를 출력함 
 
-  
-
-
-
+<br><br>
 
 - 하나의 이미지에 대한 추론 결과 출력 (__-o 'one'__)
 
@@ -94,7 +92,7 @@ python main.py
   - 사용 예시
 
   ```sh
-  python inference.py -i './test/BACTERIA-134339-0001.jpeg' -o 'one' -p 'weights.pt' -m resnet18
+  python inference.py -i './test/NORMAL/1.jpeg' -o 'one' -p 'weights.pt' -m resnet18
   ```
 
   - 결과 출력
@@ -103,7 +101,7 @@ python main.py
 
       
 
-<br>
+<br><br>
 
 - 폴더 안의 모든 이미지에 대한 결과 출력 (__-o 'onebyone'__)
 
@@ -111,7 +109,7 @@ python main.py
   - 사용 예시
 
   ```sh
-  python inference.py -i './test' -o 'onebyone' -p 'weights.pt' -m resnet18
+  python inference.py -i './test/NORMAL/' -o 'onebyone' -p 'weights.pt' -m resnet18
   ```
 
   - 결과 출력
@@ -119,7 +117,7 @@ python main.py
     - 사용 예시에 --save_dict 추가하면 각 이미지의 추론 결과, softmax 값을 csv 로 저장
       - infer_result.csv 로 저장됨
 
-<br>
+<br><br>
 
 - -m 옵션으로 들어가는 모델명 목록
   - resnet18
@@ -135,7 +133,7 @@ python main.py
 
 
 
-
+<br><br>
 
 ### Etc
 
