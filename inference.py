@@ -58,6 +58,7 @@ def ArgumentParse(_intro_msg, L_Param, bUseParam=False):
     parser.add_argument('-d', '--device', default="cuda:0")
     parser.add_argument('-p', '--pt_path', required=True ,help="please input pt file path")
     parser.add_argument('-m', '--model', required=True ,help="what model ?")
+    parser.add_argument('--save_dict', action='store_true')
 
     args = parser.parse_args()
     return args
@@ -72,6 +73,7 @@ class Inference:
         _model, _device = self.initialization(device=self.args.device)
         self.model      = _model
         self.device     = _device
+        print(f"\nOperate selected inference ... '{self.args.order}'\n")
 
     def initialization(self, device):
         initializer = Initializer(net=self.args.model,
@@ -102,10 +104,10 @@ class Inference:
     def operation_all(self):
         data_loader = self.loader_with_transforms(root=self.args.image_path)
         test_accuracy, report , _l = evaluate(self.model, data_loader, self.device, is_test=True)
-        print("=============================================")
+        print("\n=============================================")
         # pprint.pprint(report)
         print('prediction Accuracy: {:.2f}%'.format(report['accuracy']*100))
-        print("=============================================")
+        print("=============================================\n")
         print('details')
         print("---------------------------------------------")
         print('NORMAL')
@@ -145,13 +147,14 @@ class Inference:
 
         r_dict = dict(zip(f_list, r_list))
         path = './infer_result.csv'
-        df = pd.DataFrame(r_dict)
-        df = df.transpose()
-        df.columns = ['predict', 'softmax value']
-        if not os.path.exists(path):
-            df.to_csv(path, mode="w")
-        else:
-            df.to_csv(path, mode="a", header=False)
+        if self.args.save_dict:
+            df = pd.DataFrame(r_dict)
+            df = df.transpose()
+            df.columns = ['predict', 'softmax value']
+            if not os.path.exists(path):
+                df.to_csv(path, mode="w")
+            else:
+                df.to_csv(path, mode="a", header=False)
 
         # print('prediction result: {file : [prediction, score]}\n')
         # print("="*80)
@@ -179,11 +182,6 @@ class Inference:
         }
         self.model.eval()
 
-        target_layers = [self.model.features[-1]] # densenet
-        cam = GradCAM(model=self.model, target_layers=target_layers, use_cuda=True)
-        targets = [ClassifierOutputTarget(1)]
-        grayscale_cam = cam(input_tensor=transformed.unsqueeze(0).float().to(self.device), targets=targets)
-
         with torch.no_grad():
             output = self.model(transformed.unsqueeze(0).float().to(self.device))
 
@@ -191,11 +189,7 @@ class Inference:
             pred = label_tags[predicted.item()]
 
         print('prediction result: %s  Score: %f' %(pred, _score))
-        print('softmax result : ', torch.softmax(output, dim=1))
-
-        grayscale_cam = grayscale_cam[0, :]
-        base_img = preprocess_image(img)
-        visualization = show_cam_on_image(base_img, grayscale_cam, use_rgb=False)
+        print('softmax result : ', torch.softmax(output, dim=1).max())
 
     def selected_operation(self,):
         if self.args.order == 'all':

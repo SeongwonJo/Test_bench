@@ -19,9 +19,10 @@ pre_model_path = ""
 
 # augmentation
 # custom
+# training
 custom_transform = A.Compose(
     [
-        A.Resize(height=224, width=224),
+        A.Resize(height=256, width=256),
         # A.OneOf(
         #     [A.Resize(height=224, width=224), A.RandomCrop(height=224, width=224)], p=1
         # ),
@@ -45,10 +46,10 @@ custom_transform = A.Compose(
 )
 
 
-# testdata setting
+# testdata
 custom_test = A.Compose(
     [
-        A.Resize(height=224, width=224),
+        A.Resize(height=256, width=256),
         #  A.Normalize(mean=0.5, std=0.5),
         ToTensorV2(),
     ]
@@ -59,9 +60,3 @@ custom_test = A.Compose(
 transforms_T = T.Compose(
     [T.Resize((256, 256)), T.ToTensor(), T.Normalize((0.5,), (0.5,)),]
 )
-
-
-# inference options
-infer_net = "densenet121"
-infer_dataset = "custom"
-infer_pt_path = "./ckpt_densenet201.pt"
