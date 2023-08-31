@@ -40,7 +40,7 @@ custom_transform = A.Compose(
         ),
         A.HorizontalFlip(p=0.5),
         # A.Rotate(10),
-        # A.Normalize(mean=0.5, std=0.5),
+        A.Normalize(mean=0.5, std=0.5),
         ToTensorV2(),
     ]
 )
@@ -50,7 +50,7 @@ custom_transform = A.Compose(
 custom_test = A.Compose(
     [
         A.Resize(height=256, width=256),
-        #  A.Normalize(mean=0.5, std=0.5),
+         A.Normalize(mean=0.5, std=0.5),
         ToTensorV2(),
     ]
 )
